@@ -1,0 +1,213 @@
+---
+- name: Reconcile canonical K3s worker network addresses
+  hosts: k3s_workers
+  become: true
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: Record the canonical inventory address
+      ansible.builtin.set_fact:
+        canonical_inventory_address: "{{ ansible_host }}"
+
+    - name: Use a temporary recovery address when supplied
+      ansible.builtin.set_fact:
+        ansible_host: >-
+          {{ worker_recovery_addresses.get(inventory_hostname, ansible_host)
+             if worker_recovery_addresses is defined else ansible_host }}
+
+    - name: Require the recorded worker identity and network
+      ansible.builtin.assert:
+        that:
+          - worker_interface is defined
+          - worker_ipv4_address is defined
+          - worker_ipv4_address == canonical_inventory_address
+          - worker_ipv4_network is defined
+          - worker_ipv4_default is defined
+          - worker_dns_server is defined
+        fail_msg: >-
+          Refusing to change networking without the recorded worker identity.
+
+    - name: Wait for the current worker address
+      ansible.builtin.wait_for_connection:
+        timeout: 30
+
+    - name: Read the connected host name
+      ansible.builtin.command:
+        argv:
+          - hostname
+          - --short
+      register: connected_hostname
+      changed_when: false
+
+    - name: Verify the recovery address belongs to the intended worker
+      ansible.builtin.assert:
+        that:
+          - connected_hostname.stdout == inventory_hostname
+        fail_msg: >-
+          Refusing to readdress {{ connected_hostname.stdout }} as
+          {{ inventory_hostname }}.
+
+  tasks:
+    - name: Configure the canonical static interface with ifupdown
+      ansible.builtin.copy:
+        dest: /etc/network/interfaces
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+        content: |
+          # Managed by Ansible: k3s-worker-network.yml
+          source /etc/network/interfaces.d/*
+
+          auto lo
+          iface lo inet loopback
+
+          auto {{ worker_interface }}
+          iface {{ worker_interface }} inet static
+              address {{ worker_ipv4_address }}
+              netmask {{ worker_ipv4_netmask }}
+              gateway {{ worker_ipv4_default }}
+              dns-nameservers {{ worker_dns_server }}
+
+          iface {{ worker_interface }} inet6 auto
+      register: ifupdown_config
+
+    - name: Read the active IPv4 interface addresses
+      ansible.builtin.command:
+        argv:
+          - ip
+          - -4
+          - -o
+          - address
+          - show
+          - dev
+          - "{{ worker_interface }}"
+      register: worker_addresses_before
+      changed_when: false
+      when: not ansible_check_mode
+
+    # The handoff briefly interrupts SSH. The asynchronous command keeps
+    # running locally while Ansible switches to the canonical address.
+    - name: Apply the canonical address through ifupdown
+      ansible.builtin.shell: |
+        set -eu
+        pkill -TERM -x dhclient 2>/dev/null || true
+        ip address flush dev {{ worker_interface }}
+        systemctl restart networking.service
+      args:
+        executable: /bin/sh
+      async: 45
+      poll: 0
+      changed_when: true
+      when:
+        - not ansible_check_mode
+        - >-
+          ifupdown_config.changed or
+          worker_ipv4_address not in worker_addresses_before.stdout
+
+    - name: Point Ansible at the canonical worker address
+      ansible.builtin.set_fact:
+        ansible_host: "{{ worker_ipv4_address }}"
+      when: not ansible_check_mode
+
+    - name: Reset the SSH connection after the address handoff
+      ansible.builtin.meta: reset_connection
+
+    - name: Wait for the worker to return on its canonical address
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 120
+      when: not ansible_check_mode
+
+    - name: Restart the K3s agent to rebuild Flannel against the canonical IP
+      ansible.builtin.systemd_service:
+        name: k3s-agent.service
+        state: restarted
+      when:
+        - not ansible_check_mode
+        - >-
+          ifupdown_config.changed or
+          worker_ipv4_address not in worker_addresses_before.stdout
+
+    - name: Keep networking and K3s enabled and running
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - networking.service
+        - k3s-agent.service
+      when: not ansible_check_mode
+
+    - name: Read the resulting IPv4 routes
+      ansible.builtin.command:
+        argv:
+          - ip
+          - -4
+          - route
+          - show
+      register: worker_routes
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Read the resulting IPv4 interface addresses
+      ansible.builtin.command:
+        argv:
+          - ip
+          - -4
+          - -o
+          - address
+          - show
+          - dev
+          - "{{ worker_interface }}"
+      register: worker_addresses_after
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Read the resulting Flannel interface
+      ansible.builtin.command:
+        argv:
+          - ip
+          - -details
+          - link
+          - show
+          - flannel.1
+      register: worker_flannel
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Verify the canonical address, routes, and Flannel endpoint
+      ansible.builtin.assert:
+        that:
+          - worker_ipv4_address in worker_addresses_after.stdout
+          - "'valid_lft forever' in worker_addresses_after.stdout"
+          - worker_ipv4_network in worker_routes.stdout
+          - worker_ipv4_default in worker_routes.stdout
+          - >-
+            ('local ' ~ worker_ipv4_address) in worker_flannel.stdout
+        success_msg: >-
+          {{ inventory_hostname }} owns its canonical address, routes, and
+          Flannel endpoint.
+      when: not ansible_check_mode
+
+    - name: Wait for Kubernetes to report the worker Ready
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - "node/{{ inventory_hostname }}"
+          - --for=condition=Ready
+          - --timeout=120s
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Explain check-mode boundary
+      ansible.builtin.debug:
+        msg: >-
+          The live address handoff, service restart, and route assertions run
+          only during apply.
+      when: ansible_check_mode

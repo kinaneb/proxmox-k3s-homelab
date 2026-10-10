@@ -1,0 +1,422 @@
+---
+# =============================================================================
+# Playbook: upgrade-trixie-vms.yaml
+# Purpose:  Controlled, rolling upgrade of Debian 13 (Trixie) virtual machines
+#           to point release 13.7.
+#
+# Scope:
+#   - Standalone VMs (gateway-1)
+#   - K3s Workers (worker-1, worker-2, worker-3) — rolling one by one
+#   - K3s Masters (control-1, control-2, control-3) — rolling one by one
+#
+# Rolling Strategy for K3s:
+#   1. Pre-check: Ensure node is Ready before initiating upgrade
+#   2. Cordon & Drain: Evict workloads gracefully (preserving daemonsets)
+#   3. Upgrade: APT cache update + dist-upgrade to 13.7 + autoremove/autoclean
+#   4. Pre-reboot: Stop K3s/agent service for clean storage/CSI unmounts
+#   5. Reboot (if required): Check /var/run/reboot-required and reboot safely
+#   6. Rejoin: Wait for node to re-enter Kubernetes 'Ready' state
+#   7. Uncordon & Settle: Re-enable scheduling and pause for stabilization
+#
+# Usage:
+#   # Full run across all VMs (requires vault password for k3s cluster):
+#   ansible-playbook playbooks/upgrade-trixie-vms.yaml --ask-vault-pass
+#
+#   # Dry-run check:
+#   ansible-playbook playbooks/upgrade-trixie-vms.yaml --ask-vault-pass --check
+#
+#   # Target only standalone VMs (no vault password required):
+#   ansible-playbook playbooks/upgrade-trixie-vms.yaml --limit standalone_vms
+#
+#   # Target only K3s workers:
+#   ansible-playbook playbooks/upgrade-trixie-vms.yaml --ask-vault-pass --tags workers
+#
+#   # Target only K3s control-plane masters:
+#   ansible-playbook playbooks/upgrade-trixie-vms.yaml --ask-vault-pass --tags masters
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Phase 1: Standalone VMs (gateway-1, etc.)
+# -----------------------------------------------------------------------------
+- name: "Phase 1 — Upgrade standalone Trixie VMs"
+  hosts: standalone_vms
+  become: true
+  tags:
+    - standalone
+    - vms
+
+  tasks:
+    - name: "Pre-check: Fetch current Debian version"
+      ansible.builtin.command: cat /etc/debian_version
+      register: pre_debian_ver
+      changed_when: false
+
+    - name: "Pre-check: Fetch current kernel version"
+      ansible.builtin.command: uname -r
+      register: pre_kernel_ver
+      changed_when: false
+
+    - name: "Display pre-upgrade version"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: Currently running Debian {{ pre_debian_ver.stdout | trim }} (Kernel: {{ pre_kernel_ver.stdout | trim }})"
+
+    - name: "Update APT package cache"
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 0
+
+    - name: "Run full package upgrade to Debian 13.7"
+      ansible.builtin.apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      register: standalone_upgrade_result
+
+    - name: "Print upgraded packages summary"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ standalone_upgrade_result.stdout_lines | select('match', '^[0-9]+ upgraded') | list }}"
+      when: standalone_upgrade_result.stdout_lines is defined and (standalone_upgrade_result.stdout_lines | select('match', '^[0-9]+ upgraded') | list | length > 0)
+
+    - name: "Check if reboot is required"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: standalone_reboot_required
+
+    - name: "Reboot standalone VM if required"
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+        pre_reboot_delay: 5
+        post_reboot_delay: 15
+        msg: "Rebooting {{ inventory_hostname }} for Debian 13.7 upgrade"
+      when: standalone_reboot_required.stat.exists
+
+    - name: "Post-check: Fetch updated Debian version"
+      ansible.builtin.command: cat /etc/debian_version
+      register: post_debian_ver
+      changed_when: false
+
+    - name: "Post-check: Fetch updated kernel version"
+      ansible.builtin.command: uname -r
+      register: post_kernel_ver
+      changed_when: false
+
+    - name: "Display post-upgrade version"
+      ansible.builtin.debug:
+        msg: "✅ {{ inventory_hostname }}: Successfully at Debian {{ post_debian_ver.stdout | trim }} (Kernel: {{ post_kernel_ver.stdout | trim }})"
+
+
+# -----------------------------------------------------------------------------
+# Phase 2: K3s Worker Nodes (Rolling one at a time)
+# -----------------------------------------------------------------------------
+- name: "Phase 2 — Upgrade K3s worker nodes (rolling, one by one)"
+  hosts: k3s_workers
+  become: true
+  serial: 1
+  tags:
+    - workers
+    - k3s
+    - vms
+
+  tasks:
+    - name: "Pre-check: Verify worker node is Ready in Kubernetes"
+      ansible.builtin.command: kubectl get node {{ inventory_hostname }}
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      register: worker_k8s_status
+      failed_when: "'NotReady' in worker_k8s_status.stdout"
+      until: worker_k8s_status.rc == 0
+      retries: 5
+      delay: 5
+
+    - name: "Pre-check: Fetch current Debian version"
+      ansible.builtin.command: cat /etc/debian_version
+      register: worker_pre_debian
+      changed_when: false
+
+    - name: "Pre-check: Fetch current kernel version"
+      ansible.builtin.command: uname -r
+      register: worker_pre_kernel
+      changed_when: false
+
+    - name: "Display worker starting state"
+      ansible.builtin.debug:
+        msg: "Initiating upgrade on {{ inventory_hostname }} — Debian {{ worker_pre_debian.stdout | trim }} (Kernel: {{ worker_pre_kernel.stdout | trim }})"
+
+    - name: "Cordon worker node (stop new pod scheduling)"
+      ansible.builtin.command: kubectl cordon {{ inventory_hostname }}
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      register: cordon_result
+      until: cordon_result.rc == 0
+      retries: 5
+      delay: 5
+
+    - name: "Drain worker node (gracefully evict workloads)"
+      ansible.builtin.command: >
+        kubectl drain {{ inventory_hostname }}
+        --ignore-daemonsets
+        --delete-emptydir-data
+        --timeout=180s
+        --grace-period=30
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      register: drain_result
+      until: drain_result.rc == 0
+      retries: 3
+      delay: 10
+
+    - name: "Update APT package cache"
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 0
+
+    - name: "Run full package upgrade to Debian 13.7"
+      ansible.builtin.apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      register: worker_upgrade_result
+
+    - name: "Print upgraded packages summary"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ worker_upgrade_result.stdout_lines | select('match', '^[0-9]+ upgraded') | list }}"
+      when: worker_upgrade_result.stdout_lines is defined and (worker_upgrade_result.stdout_lines | select('match', '^[0-9]+ upgraded') | list | length > 0)
+
+    - name: "Check if reboot is required"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: worker_reboot_required
+
+    - name: "Stop k3s-agent service before reboot to ensure clean storage/CSI unmounts"
+      ansible.builtin.systemd:
+        name: k3s-agent
+        state: stopped
+      when: worker_reboot_required.stat.exists
+
+    - name: "Reboot worker node if required"
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+        pre_reboot_delay: 5
+        post_reboot_delay: 20
+        msg: "Rebooting {{ inventory_hostname }} for Debian 13.7 upgrade"
+      when: worker_reboot_required.stat.exists
+
+    - name: "Wait for worker node to re-enter Ready state in Kubernetes"
+      ansible.builtin.command: >
+        kubectl wait node {{ inventory_hostname }}
+        --for=condition=Ready
+        --timeout=300s
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      register: wait_ready
+      until: wait_ready.rc == 0
+      retries: 5
+      delay: 10
+
+    - name: "Uncordon worker node (re-enable pod scheduling)"
+      ansible.builtin.command: kubectl uncordon {{ inventory_hostname }}
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      register: uncordon_result
+      until: uncordon_result.rc == 0
+      retries: 5
+      delay: 5
+
+    - name: "Post-check: Fetch updated Debian version"
+      ansible.builtin.command: cat /etc/debian_version
+      register: worker_post_debian
+      changed_when: false
+
+    - name: "Post-check: Fetch updated kernel version"
+      ansible.builtin.command: uname -r
+      register: worker_post_kernel
+      changed_when: false
+
+    - name: "Display worker upgrade result"
+      ansible.builtin.debug:
+        msg: "✅ {{ inventory_hostname }}: Ready at Debian {{ worker_post_debian.stdout | trim }} (Kernel: {{ worker_post_kernel.stdout | trim }})"
+
+    - name: "Pause 20s for workloads to settle before proceeding to next worker"
+      ansible.builtin.pause:
+        seconds: 20
+
+
+# -----------------------------------------------------------------------------
+# Phase 3: K3s Master Nodes (Rolling one at a time)
+# -----------------------------------------------------------------------------
+- name: "Phase 3 — Upgrade K3s master nodes (rolling, one by one)"
+  hosts: k3s_masters
+  become: true
+  serial: 1
+  tags:
+    - masters
+    - k3s
+    - vms
+
+  tasks:
+    - name: "Pre-check: Verify master node is Ready in Kubernetes"
+      ansible.builtin.command: kubectl get node {{ inventory_hostname }}
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      register: master_k8s_status
+      failed_when: "'NotReady' in master_k8s_status.stdout"
+      until: master_k8s_status.rc == 0
+      retries: 10
+      delay: 5
+
+    - name: "Pre-check: Fetch current Debian version"
+      ansible.builtin.command: cat /etc/debian_version
+      register: master_pre_debian
+      changed_when: false
+
+    - name: "Pre-check: Fetch current kernel version"
+      ansible.builtin.command: uname -r
+      register: master_pre_kernel
+      changed_when: false
+
+    - name: "Display master starting state"
+      ansible.builtin.debug:
+        msg: "Initiating upgrade on {{ inventory_hostname }} — Debian {{ master_pre_debian.stdout | trim }} (Kernel: {{ master_pre_kernel.stdout | trim }})"
+
+    - name: "Ensure /etc/rancher/k3s directory exists"
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: '0755'
+
+    - name: "Pin node-ip to IPv4 in k3s config (prevents IPv6 SLAAC etcd mismatch)"
+      ansible.builtin.lineinfile:
+        path: /etc/rancher/k3s/config.yaml
+        regexp: '^node-ip:'
+        line: 'node-ip: "{{ ansible_host }}"'
+        create: true
+        mode: '0644'
+
+    - name: "Cordon master node"
+      ansible.builtin.command: kubectl cordon {{ inventory_hostname }}
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      register: master_cordon
+      until: master_cordon.rc == 0
+      retries: 10
+      delay: 5
+
+    - name: "Drain master node (preserving control plane & daemonsets)"
+      ansible.builtin.command: >
+        kubectl drain {{ inventory_hostname }}
+        --ignore-daemonsets
+        --delete-emptydir-data
+        --timeout=180s
+        --grace-period=30
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      register: master_drain
+      until: master_drain.rc == 0
+      retries: 3
+      delay: 10
+
+    - name: "Update APT package cache"
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 0
+
+    - name: "Run full package upgrade to Debian 13.7"
+      ansible.builtin.apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      register: master_upgrade_result
+
+    - name: "Print upgraded packages summary"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ master_upgrade_result.stdout_lines | select('match', '^[0-9]+ upgraded') | list }}"
+      when: master_upgrade_result.stdout_lines is defined and (master_upgrade_result.stdout_lines | select('match', '^[0-9]+ upgraded') | list | length > 0)
+
+    - name: "Check if reboot is required"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: master_reboot_required
+
+    - name: "Stop k3s service before reboot to ensure clean etcd and storage unmounts"
+      ansible.builtin.systemd:
+        name: k3s
+        state: stopped
+      when: master_reboot_required.stat.exists
+
+    - name: "Reboot master node if required"
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+        msg: "Rebooting {{ inventory_hostname }} for Debian 13.7 upgrade"
+      when: master_reboot_required.stat.exists
+
+    - name: "Wait for master node to re-enter Ready state in Kubernetes"
+      ansible.builtin.command: >
+        kubectl wait node {{ inventory_hostname }}
+        --for=condition=Ready
+        --timeout=300s
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      register: master_wait
+      until: master_wait.rc == 0
+      retries: 10
+      delay: 10
+
+    - name: "Uncordon master node"
+      ansible.builtin.command: kubectl uncordon {{ inventory_hostname }}
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      register: master_uncordon
+      until: master_uncordon.rc == 0
+      retries: 10
+      delay: 5
+
+    - name: "Post-check: Fetch updated Debian version"
+      ansible.builtin.command: cat /etc/debian_version
+      register: master_post_debian
+      changed_when: false
+
+    - name: "Post-check: Fetch updated kernel version"
+      ansible.builtin.command: uname -r
+      register: master_post_kernel
+      changed_when: false
+
+    - name: "Display master upgrade result"
+      ansible.builtin.debug:
+        msg: "✅ {{ inventory_hostname }}: Ready at Debian {{ master_post_debian.stdout | trim }} (Kernel: {{ master_post_kernel.stdout | trim }})"
+
+    - name: "Pause 30s for etcd quorum to stabilize before proceeding to next master"
+      ansible.builtin.pause:
+        seconds: 30
+
+
+# -----------------------------------------------------------------------------
+# Phase 4: Cluster Status & Verification
+# -----------------------------------------------------------------------------
+- name: "Phase 4 — Verify K3s cluster health and node versions"
+  hosts: localhost
+  gather_facts: false
+  tags:
+    - verify
+    - k3s
+
+  tasks:
+    - name: "Retrieve Kubernetes cluster node list"
+      ansible.builtin.command: kubectl get nodes -o wide
+      register: cluster_nodes
+      changed_when: false
+
+    - name: "Display cluster nodes overview"
+      ansible.builtin.debug:
+        msg: "{{ cluster_nodes.stdout_lines }}"

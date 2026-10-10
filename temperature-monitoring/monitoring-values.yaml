@@ -1,0 +1,42 @@
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+
+grafana:
+  enabled: true
+  ingress:
+    enabled: true
+    hosts:
+      - grafana.example.invalid
+    path: /
+
+alertmanager:
+  alertmanagerSpec:
+    alertmanagerConfigSelector:
+      matchLabels:
+        alertmanagerConfig: main
+
+# alertmanager:
+#   config:
+#     global:
+#       resolve_timeout: 5m
+#     route:
+#       group_by: ["alertname"]
+#       receiver: "discord-notifications"
+#     receivers:
+#       - name: "discord-notifications"
+#         discord_configs:
+#           - webhook_url: "${DISCORD_WEBHOOK_URL}"
+
+kubeControllerManager:
+  enabled: false
+kubeCoreDNS:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false

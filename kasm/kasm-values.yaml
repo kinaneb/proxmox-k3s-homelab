@@ -1,0 +1,28 @@
+ingress:
+  enabled: false
+  ingressClassName: traefik
+  # In Kasm's chart, 'host' is a direct property, not a list under 'hosts'
+  host: kasm.example.invalid
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  accessMode: ReadWriteOnce
+  size: 20Gi
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+
+kasm:
+  publicAddr: "kasm.example.invalid"
+  serviceType: ClusterIP
+
+proxyService:
+  type: ClusterIP

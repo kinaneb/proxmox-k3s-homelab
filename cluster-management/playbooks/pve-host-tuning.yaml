@@ -1,0 +1,29 @@
+---
+- name: Optimize Proxmox Hypervisor Layer Blocks
+  hosts: proxmox
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Enable periodic fstrim timer for virtualized block storage
+      ansible.builtin.systemd_service:
+        name: fstrim.timer
+        state: started
+        enabled: true
+
+    - name: Configure thin pool auto-extension thresholds
+      ansible.builtin.lineinfile:
+        path: /etc/lvm/lvm.conf
+        regexp: '^\s*thin_pool_autoextend_threshold\s*='
+        line: "    thin_pool_autoextend_threshold = 80"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Set thin pool auto-extension sizing parameters
+      ansible.builtin.lineinfile:
+        path: /etc/lvm/lvm.conf
+        regexp: '^\s*thin_pool_autoextend_percent\s*='
+        line: "    thin_pool_autoextend_percent = 20"
+        owner: root
+        group: root
+        mode: "0644"

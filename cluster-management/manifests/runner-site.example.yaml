@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: forgejo-runner-site
+  namespace: forgejo-runners
+data:
+  instance-url: https://forgejo.example.invalid
+  registry-endpoint: 192.0.2.10:30500
+  runner-name: homelab-runner

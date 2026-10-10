@@ -1,0 +1,41 @@
+# storage server running Unraid (hostname Data).
+# Replace the documentation address through the ignored local manifest.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: unraid-monitor
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: unraid-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unraid-exporter
+  namespace: monitoring
+  labels:
+    app: unraid-exporter
+spec:
+  ports:
+  - name: metrics
+    port: 9100
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: unraid-exporter
+  namespace: monitoring
+subsets:
+- addresses:
+  - ip: 192.0.2.30
+  ports:
+  - port: 9100
+    name: metrics

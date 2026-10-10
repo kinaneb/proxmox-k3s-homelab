@@ -1,0 +1,26 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: linguawalk-rate-limit
+  namespace: linguawalk
+  labels:
+    app.kubernetes.io/name: linguawalk
+spec:
+  rateLimit:
+    average: 60
+    burst: 30
+    period: 1m
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: linguawalk-security-headers
+  namespace: linguawalk
+  labels:
+    app.kubernetes.io/name: linguawalk
+spec:
+  headers:
+    contentTypeNosniff: true
+    frameDeny: true
+    referrerPolicy: no-referrer
+    permissionsPolicy: camera=(), geolocation=(), microphone=()

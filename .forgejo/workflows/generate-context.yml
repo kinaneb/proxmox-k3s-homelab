@@ -1,0 +1,78 @@
+name: Push Architecture Context to Drive
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - cluster-management/**
+      - temperature-monitoring/**
+      - cluster_status_export/**
+      - README.md
+      - PROJECT_STATE.md
+      - AGENTS.md
+      - .forgejo/workflows/**
+
+jobs:
+  compile-and-push:
+    runs-on: self-hosted
+    container:
+      image: node:20-alpine
+    steps:
+      - name: Install system dependencies
+        run: apk add --no-cache git curl jq
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compile and upload private context
+        env:
+          REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
+          CLIENT_ID: ${{ secrets.GCP_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.GCP_CLIENT_SECRET }}
+          TARGET_FOLDER_ID: ${{ secrets.GCP_TARGET_FOLDER_ID }}
+          PRIVATE_SITE_CONTEXT: ${{ secrets.HOMELAB_SITE_CONTEXT }}
+        run: |
+          set -eu
+          context_file=/tmp/homelab_context.md
+
+          cat > "$context_file" <<'EOF'
+          # Homelab architecture context
+
+          Site-specific topology is supplied at runtime from the protected
+          `HOMELAB_SITE_CONTEXT` Forgejo Actions secret. The repository contains
+          only public examples and role-level documentation.
+          EOF
+
+          if [ -n "$PRIVATE_SITE_CONTEXT" ]; then
+            printf '\n%s\n' "$PRIVATE_SITE_CONTEXT" >> "$context_file"
+          fi
+
+          for public_file in README.md PROJECT_STATE.md cluster_status_export/*.example.md; do
+            [ -f "$public_file" ] || continue
+            printf '\n## %s\n\n' "$public_file" >> "$context_file"
+            cat "$public_file" >> "$context_file"
+          done
+
+          access_token=$(curl -fsS -X POST https://oauth2.googleapis.com/token \
+            --data "client_id=${CLIENT_ID}" \
+            --data "client_secret=${CLIENT_SECRET}" \
+            --data "refresh_token=${REFRESH_TOKEN}" \
+            --data "grant_type=refresh_token" | jq -er '.access_token')
+
+          file_id=$(curl -fsS -H "Authorization: Bearer $access_token" \
+            "https://www.googleapis.com/drive/v3/files?q='${TARGET_FOLDER_ID}'+in+parents+and+name='homelab_context.md'+and+trashed=false" \
+            | jq -r '.files[0].id // empty')
+
+          if [ -z "$file_id" ]; then
+            curl -fsS -X POST -H "Authorization: Bearer $access_token" \
+              -F "metadata={\"name\":\"homelab_context.md\",\"parents\":[\"$TARGET_FOLDER_ID\"]};type=application/json" \
+              -F "file=@${context_file};type=text/markdown" \
+              "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
+          else
+            curl -fsS -X PATCH -H "Authorization: Bearer $access_token" \
+              -F 'metadata={"name":"homelab_context.md"};type=application/json' \
+              -F "file=@${context_file};type=text/markdown" \
+              "https://www.googleapis.com/upload/drive/v3/files/${file_id}?uploadType=multipart"
+          fi
+
+          rm -f "$context_file"

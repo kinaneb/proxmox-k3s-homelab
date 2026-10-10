@@ -1,0 +1,1880 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LinguaWalk Learning Memory API",
+    "version": "3.1.0",
+    "description": "Stores and retrieves one learner's LinguaWalk sessions, observed vocabulary and grammar events, adaptive targets, profile, and progress."
+  },
+  "paths": {
+    "/profile": {
+      "get": {
+        "summary": "Get learner profile",
+        "operationId": "getLearnerProfile",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearnerProfile"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Read the learner's baseline, CEFR levels, strengths, weaknesses, learning-method preferences, and current item counts.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/progress": {
+      "get": {
+        "summary": "Get learning progress",
+        "operationId": "getLearningProgress",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearningProgress"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Read lifetime session and event totals, current vocabulary and grammar state, and the latest weekly and monthly summaries.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/learning/targets": {
+      "get": {
+        "summary": "Get due learning targets",
+        "operationId": "getLearningTargets",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearningTargets"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get vocabulary and grammar items currently due for natural review, including priorities, reasons, and recommended methods.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/session/start": {
+      "post": {
+        "summary": "Start a learning session",
+        "operationId": "startSession",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a LinguaWalk session and return its server-owned ID together with the learner profile, due targets, and maintenance state.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false
+      }
+    },
+    "/vocabulary/event": {
+      "post": {
+        "summary": "Record a vocabulary event",
+        "operationId": "recordVocabularyEvent",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VocabularyEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VocabularyEventResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Record one observed vocabulary learning event for the active session and return the updated vocabulary item state.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false
+      }
+    },
+    "/grammar/event": {
+      "post": {
+        "summary": "Record a grammar event",
+        "operationId": "recordGrammarEvent",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrammarEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrammarEventResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Record one observed grammar learning event for the active session and return the updated grammar item state.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false
+      }
+    },
+    "/session/end": {
+      "post": {
+        "summary": "End a learning session",
+        "operationId": "endSession",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndSessionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Close a LinguaWalk session with its subjects, summary, and learner notes, then return stored closure and event counts.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EndSessionRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Session Id"
+          },
+          "subjects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Subjects"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "learner_notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learner Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "title": "EndSessionRequest"
+      },
+      "EndSessionResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "ended_at": {
+            "type": "string",
+            "title": "Ended At"
+          },
+          "already_ended": {
+            "type": "boolean",
+            "title": "Already Ended"
+          },
+          "subjects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Subjects"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "learner_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learner Notes"
+          },
+          "vocabulary_event_count": {
+            "type": "integer",
+            "title": "Vocabulary Event Count",
+            "default": 0
+          },
+          "grammar_event_count": {
+            "type": "integer",
+            "title": "Grammar Event Count",
+            "default": 0
+          },
+          "total_event_count": {
+            "type": "integer",
+            "title": "Total Event Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "session_id",
+          "started_at",
+          "ended_at",
+          "already_ended"
+        ],
+        "title": "EndSessionResult"
+      },
+      "GrammarEventRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "FRENCH",
+              "ENGLISH"
+            ],
+            "title": "Language",
+            "default": "FRENCH"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "LEARNING_ERROR",
+              "RECURRING_ERROR",
+              "CORRECT_USAGE",
+              "NATURAL_SUCCESS",
+              "SPONTANEOUS_SUCCESS",
+              "REACTIVATION_SUCCESS",
+              "REACTIVATION_FAILURE"
+            ],
+            "title": "Event Type"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "usefulness_score": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usefulness Score"
+          },
+          "session_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Subject"
+          },
+          "event_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Subject"
+          },
+          "user_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Form"
+          },
+          "correct_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correct Form"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
+          "review_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Method"
+          },
+          "hint_level": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Hint Level",
+            "default": 0
+          },
+          "retrieval_speed": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "FAST",
+                  "HESITANT",
+                  "VERY_HESITANT",
+                  "FAILED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieval Speed"
+          },
+          "agent_prompted_target": {
+            "type": "boolean",
+            "title": "Agent Prompted Target",
+            "default": false
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "key",
+          "event_type"
+        ],
+        "title": "GrammarEventRequest"
+      },
+      "GrammarEventResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "IMPROVING",
+              "STABLE"
+            ],
+            "title": "Status"
+          },
+          "usefulness_score": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Usefulness Score"
+          },
+          "correct_usage_count": {
+            "type": "integer",
+            "title": "Correct Usage Count",
+            "default": 0
+          },
+          "mistake_count_total": {
+            "type": "integer",
+            "title": "Mistake Count Total",
+            "default": 0
+          },
+          "recent_correct_count": {
+            "type": "integer",
+            "title": "Recent Correct Count",
+            "default": 0
+          },
+          "recent_mistake_count": {
+            "type": "integer",
+            "title": "Recent Mistake Count",
+            "default": 0
+          },
+          "error_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Error Rate"
+          },
+          "recent_error_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Recent Error Rate"
+          },
+          "priority_score": {
+            "type": "number",
+            "title": "Priority Score",
+            "default": 0.0
+          },
+          "last_mistake_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Mistake At"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "key",
+          "status",
+          "usefulness_score",
+          "error_rate",
+          "recent_error_rate"
+        ],
+        "title": "GrammarEventResult"
+      },
+      "GrammarTarget": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "usefulness_score": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Usefulness Score"
+          },
+          "correct_usage_count": {
+            "type": "integer",
+            "title": "Correct Usage Count",
+            "default": 0
+          },
+          "mistake_count": {
+            "type": "integer",
+            "title": "Mistake Count",
+            "default": 0
+          },
+          "error_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Error Rate",
+            "default": 0.0
+          },
+          "priority_score": {
+            "type": "number",
+            "title": "Priority Score",
+            "default": 0.0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "IMPROVING",
+              "STABLE"
+            ],
+            "title": "Status"
+          },
+          "last_mistake": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Mistake"
+          },
+          "last_success": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success"
+          },
+          "next_review_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Review At"
+          },
+          "recommended_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Method"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "usefulness_score",
+          "status"
+        ],
+        "title": "GrammarTarget"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LearnerProfile": {
+        "properties": {
+          "baseline_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Date"
+          },
+          "baseline_french_cefr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline French Cefr"
+          },
+          "overall_french_cefr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overall French Cefr"
+          },
+          "speaking_cefr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaking Cefr"
+          },
+          "grammar_cefr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grammar Cefr"
+          },
+          "vocabulary_cefr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vocabulary Cefr"
+          },
+          "listening_cefr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Listening Cefr"
+          },
+          "fluency_cefr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fluency Cefr"
+          },
+          "strengths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Strengths",
+            "default": []
+          },
+          "weaknesses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Weaknesses",
+            "default": []
+          },
+          "best_learning_methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Best Learning Methods",
+            "default": []
+          },
+          "weak_learning_methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Weak Learning Methods",
+            "default": []
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "active_vocabulary_count": {
+            "type": "integer",
+            "title": "Active Vocabulary Count",
+            "default": 0
+          },
+          "learned_vocabulary_count": {
+            "type": "integer",
+            "title": "Learned Vocabulary Count",
+            "default": 0
+          },
+          "active_grammar_count": {
+            "type": "integer",
+            "title": "Active Grammar Count",
+            "default": 0
+          },
+          "stable_grammar_count": {
+            "type": "integer",
+            "title": "Stable Grammar Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "LearnerProfile"
+      },
+      "LearningProgress": {
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          },
+          "total_sessions": {
+            "type": "integer",
+            "title": "Total Sessions",
+            "default": 0
+          },
+          "completed_sessions": {
+            "type": "integer",
+            "title": "Completed Sessions",
+            "default": 0
+          },
+          "vocabulary_event_count": {
+            "type": "integer",
+            "title": "Vocabulary Event Count",
+            "default": 0
+          },
+          "grammar_event_count": {
+            "type": "integer",
+            "title": "Grammar Event Count",
+            "default": 0
+          },
+          "vocabulary_not_learned": {
+            "type": "integer",
+            "title": "Vocabulary Not Learned",
+            "default": 0
+          },
+          "vocabulary_learning": {
+            "type": "integer",
+            "title": "Vocabulary Learning",
+            "default": 0
+          },
+          "vocabulary_learned": {
+            "type": "integer",
+            "title": "Vocabulary Learned",
+            "default": 0
+          },
+          "vocabulary_mistakes_total": {
+            "type": "integer",
+            "title": "Vocabulary Mistakes Total",
+            "default": 0
+          },
+          "grammar_active": {
+            "type": "integer",
+            "title": "Grammar Active",
+            "default": 0
+          },
+          "grammar_improving": {
+            "type": "integer",
+            "title": "Grammar Improving",
+            "default": 0
+          },
+          "grammar_stable": {
+            "type": "integer",
+            "title": "Grammar Stable",
+            "default": 0
+          },
+          "grammar_mistakes_total": {
+            "type": "integer",
+            "title": "Grammar Mistakes Total",
+            "default": 0
+          },
+          "grammar_correct_usage_total": {
+            "type": "integer",
+            "title": "Grammar Correct Usage Total",
+            "default": 0
+          },
+          "latest_weekly_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeeklyProgressSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_monthly_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MonthlyProgressSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "generated_at"
+        ],
+        "title": "LearningProgress"
+      },
+      "LearningTargets": {
+        "properties": {
+          "vocabulary": {
+            "items": {
+              "$ref": "#/components/schemas/VocabularyTarget"
+            },
+            "type": "array",
+            "title": "Vocabulary",
+            "default": []
+          },
+          "grammar": {
+            "items": {
+              "$ref": "#/components/schemas/GrammarTarget"
+            },
+            "type": "array",
+            "title": "Grammar",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "LearningTargets"
+      },
+      "MaintenanceState": {
+        "properties": {
+          "weekly_consolidation_performed": {
+            "type": "boolean",
+            "title": "Weekly Consolidation Performed",
+            "default": false
+          },
+          "monthly_consolidation_performed": {
+            "type": "boolean",
+            "title": "Monthly Consolidation Performed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "MaintenanceState"
+      },
+      "MonthlyProgressSummary": {
+        "properties": {
+          "month": {
+            "type": "string",
+            "title": "Month"
+          },
+          "session_count": {
+            "type": "integer",
+            "title": "Session Count",
+            "default": 0
+          },
+          "vocabulary_learning": {
+            "type": "integer",
+            "title": "Vocabulary Learning",
+            "default": 0
+          },
+          "vocabulary_learned": {
+            "type": "integer",
+            "title": "Vocabulary Learned",
+            "default": 0
+          },
+          "vocabulary_mistakes": {
+            "type": "integer",
+            "title": "Vocabulary Mistakes",
+            "default": 0
+          },
+          "active_grammar": {
+            "type": "integer",
+            "title": "Active Grammar",
+            "default": 0
+          },
+          "improving_grammar": {
+            "type": "integer",
+            "title": "Improving Grammar",
+            "default": 0
+          },
+          "stable_grammar": {
+            "type": "integer",
+            "title": "Stable Grammar",
+            "default": 0
+          },
+          "grammar_mistakes": {
+            "type": "integer",
+            "title": "Grammar Mistakes",
+            "default": 0
+          },
+          "french_cefr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "French Cefr"
+          },
+          "consolidated_at": {
+            "type": "string",
+            "title": "Consolidated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month",
+          "consolidated_at"
+        ],
+        "title": "MonthlyProgressSummary"
+      },
+      "StartSessionRequest": {
+        "properties": {
+          "primary_language": {
+            "type": "string",
+            "enum": [
+              "FRENCH",
+              "ENGLISH"
+            ],
+            "title": "Primary Language",
+            "default": "FRENCH"
+          },
+          "secondary_language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "FRENCH",
+                  "ENGLISH"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary Language",
+            "default": "ENGLISH"
+          },
+          "session_type": {
+            "type": "string",
+            "enum": [
+              "MORNING_WALK",
+              "GENERAL_CONVERSATION",
+              "REVIEW"
+            ],
+            "title": "Session Type",
+            "default": "MORNING_WALK"
+          },
+          "session_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Subject",
+            "default": "Daily news recap"
+          }
+        },
+        "type": "object",
+        "title": "StartSessionRequest"
+      },
+      "StartSessionResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "learner_profile": {
+            "$ref": "#/components/schemas/LearnerProfile"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/LearningTargets"
+          },
+          "maintenance": {
+            "$ref": "#/components/schemas/MaintenanceState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "learner_profile",
+          "targets",
+          "maintenance"
+        ],
+        "title": "StartSessionResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VocabularyEventRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "FRENCH",
+              "ENGLISH"
+            ],
+            "title": "Language"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "UNKNOWN_WORD",
+              "MEANING_REQUEST",
+              "SPELLING_REQUEST",
+              "FAILURE",
+              "RECOGNITION",
+              "PROMPTED_SUCCESS",
+              "NATURAL_SUCCESS",
+              "SPONTANEOUS_SUCCESS"
+            ],
+            "title": "Event Type"
+          },
+          "session_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Subject"
+          },
+          "event_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Subject"
+          },
+          "user_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Form"
+          },
+          "correct_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correct Form"
+          },
+          "meaning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meaning"
+          },
+          "example": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Example"
+          },
+          "review_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Method"
+          },
+          "hint_level": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Hint Level",
+            "default": 0
+          },
+          "retrieval_speed": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "FAST",
+                  "HESITANT",
+                  "VERY_HESITANT",
+                  "FAILED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieval Speed"
+          },
+          "agent_prompted_target": {
+            "type": "boolean",
+            "title": "Agent Prompted Target",
+            "default": false
+          },
+          "agent_supplied_immediately_before": {
+            "type": "boolean",
+            "title": "Agent Supplied Immediately Before",
+            "default": false
+          },
+          "learning_question": {
+            "type": "boolean",
+            "title": "Learning Question",
+            "default": false
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "language",
+          "key",
+          "event_type"
+        ],
+        "title": "VocabularyEventRequest"
+      },
+      "VocabularyEventResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NOT_LEARNED",
+              "LEARNING",
+              "LEARNED"
+            ],
+            "title": "Status"
+          },
+          "mastery_level": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Mastery Level"
+          },
+          "difficulty": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Difficulty"
+          },
+          "mistake_count_total": {
+            "type": "integer",
+            "title": "Mistake Count Total",
+            "default": 0
+          },
+          "spontaneous_success_count": {
+            "type": "integer",
+            "title": "Spontaneous Success Count",
+            "default": 0
+          },
+          "qualifying_spontaneous_weeks": {
+            "type": "integer",
+            "title": "Qualifying Spontaneous Weeks",
+            "default": 0
+          },
+          "learned_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learned At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "key",
+          "status",
+          "mastery_level",
+          "difficulty"
+        ],
+        "title": "VocabularyEventResult"
+      },
+      "VocabularyTarget": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "FRENCH",
+              "ENGLISH"
+            ],
+            "title": "Language"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NOT_LEARNED",
+              "LEARNING",
+              "LEARNED"
+            ],
+            "title": "Status"
+          },
+          "mastery_level": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Mastery Level"
+          },
+          "difficulty": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Difficulty"
+          },
+          "priority": {
+            "type": "number",
+            "title": "Priority",
+            "default": 0.0
+          },
+          "last_seen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen"
+          },
+          "last_mistake": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Mistake"
+          },
+          "next_review_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Review At"
+          },
+          "recommended_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Method"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "language",
+          "status",
+          "mastery_level",
+          "difficulty"
+        ],
+        "title": "VocabularyTarget"
+      },
+      "WeeklyProgressSummary": {
+        "properties": {
+          "week": {
+            "type": "string",
+            "title": "Week"
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date"
+          },
+          "session_count": {
+            "type": "integer",
+            "title": "Session Count",
+            "default": 0
+          },
+          "vocabulary_learning": {
+            "type": "integer",
+            "title": "Vocabulary Learning",
+            "default": 0
+          },
+          "vocabulary_learned": {
+            "type": "integer",
+            "title": "Vocabulary Learned",
+            "default": 0
+          },
+          "vocabulary_mistakes": {
+            "type": "integer",
+            "title": "Vocabulary Mistakes",
+            "default": 0
+          },
+          "active_grammar": {
+            "type": "integer",
+            "title": "Active Grammar",
+            "default": 0
+          },
+          "improving_grammar": {
+            "type": "integer",
+            "title": "Improving Grammar",
+            "default": 0
+          },
+          "stable_grammar": {
+            "type": "integer",
+            "title": "Stable Grammar",
+            "default": 0
+          },
+          "grammar_mistakes": {
+            "type": "integer",
+            "title": "Grammar Mistakes",
+            "default": 0
+          },
+          "consolidated_at": {
+            "type": "string",
+            "title": "Consolidated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "week",
+          "start_date",
+          "end_date",
+          "consolidated_at"
+        ],
+        "title": "WeeklyProgressSummary"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "LinguaWalk API key configured as Bearer authentication in the GPT editor."
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://linguawalk-public.example.invalid"
+    }
+  ]
+}

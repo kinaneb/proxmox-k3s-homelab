@@ -1,0 +1,45 @@
+---
+# =============================================================================
+# Playbook: fix-proxmox-dns.yaml
+# Purpose:  Update DNS nameserver on all Proxmox hosts from the old resolver
+#           to the new resolver recorded in ignored local group variables.
+#
+#           On Proxmox VE, DNS is configured via /etc/resolv.conf which is
+#           managed by pvenetcommit / the Proxmox network stack. The correct
+#           way to persist DNS on PVE is via /etc/resolv.conf directly
+#           (PVE does not use systemd-resolved or NetworkManager).
+#
+# Usage:
+#   ansible-playbook playbooks/fix-proxmox-dns.yaml
+# =============================================================================
+
+- name: Fix DNS nameserver on Proxmox hosts
+  hosts: proxmox
+  become: true
+
+  tasks:
+    - name: "Check current nameserver"
+      ansible.builtin.command: grep nameserver /etc/resolv.conf
+      register: current_dns
+      changed_when: false
+
+    - name: "Print current DNS"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: current DNS = {{ current_dns.stdout }}"
+
+    - name: "Replace old nameserver in /etc/resolv.conf"
+      ansible.builtin.replace:
+        path: /etc/resolv.conf
+        regexp: 'nameserver {{ old_dns }}'
+        replace: 'nameserver {{ new_dns }}'
+        backup: yes
+
+    - name: "Verify DNS resolves correctly"
+      ansible.builtin.command: nslookup download.proxmox.com {{ new_dns }}
+      register: dns_check
+      changed_when: false
+      failed_when: "'SERVFAIL' in dns_check.stdout or 'NXDOMAIN' in dns_check.stdout"
+
+    - name: "Confirm DNS working"
+      ansible.builtin.debug:
+        msg: "✅ {{ inventory_hostname }}: DNS resolving via {{ new_dns }}"

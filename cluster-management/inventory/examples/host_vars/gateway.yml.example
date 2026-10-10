@@ -1,0 +1,14 @@
+---
+gateway_interface: ens18
+gateway_ipv4_address: 192.0.2.40
+gateway_ipv4_netmask: 255.255.255.0
+gateway_ipv4_prefix: 24
+gateway_ipv4_network: 192.0.2.0/24
+gateway_ipv4_default: 192.0.2.1
+gateway_dns_server: 192.0.2.53
+linguawalk_ingress_address: 192.0.2.10
+linguawalk_ingress_host: linguawalk.example.invalid
+linguawalk_funnel_proxy_port: 18080
+linguawalk_funnel_https_port: 443
+linguawalk_funnel_public_host: linguawalk-public.example.invalid
+linguawalk_funnel_enabled: false

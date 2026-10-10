@@ -1,0 +1,151 @@
+---
+- name: Validate Longhorn worker storage
+  hosts: k3s_workers
+  become: true
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+
+  tasks:
+    - name: Require explicit storage identities
+      ansible.builtin.assert:
+        that:
+          - longhorn_mount_path | default('') == '/var/lib/longhorn'
+          - longhorn_fs_uuid | default('') is match('^[0-9a-fA-F-]{36}$')
+          - longhorn_disk_uuid | default('') is match('^[0-9a-fA-F-]{36}$')
+        fail_msg: Worker storage identities must be explicitly recorded in host_vars.
+
+    - name: Verify expected filesystem UUID exists
+      ansible.builtin.command:
+        argv:
+          - blkid
+          - -U
+          - "{{ longhorn_fs_uuid }}"
+      register: longhorn_device
+      changed_when: false
+      check_mode: false
+      failed_when: longhorn_device.rc != 0
+
+    - name: Show resolved Longhorn device
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} Longhorn filesystem
+          {{ longhorn_fs_uuid }} resolves to
+          {{ longhorn_device.stdout }}
+
+    - name: Determine mounted filesystem UUID
+      ansible.builtin.command:
+        argv:
+          - findmnt
+          - -n
+          - -o
+          - UUID,FSTYPE
+          - --mountpoint
+          - "{{ longhorn_mount_path }}"
+      register: mounted_uuid
+      changed_when: false
+      check_mode: false
+
+    - name: Fail if wrong filesystem is mounted
+      ansible.builtin.assert:
+        that:
+          - mounted_uuid.stdout.split() == [longhorn_fs_uuid, 'ext4']
+        fail_msg: >-
+          Refusing to continue on {{ inventory_hostname }}:
+          {{ longhorn_mount_path }} is not filesystem
+          {{ longhorn_fs_uuid }}.
+
+    - name: Read Longhorn disk identity
+      ansible.builtin.slurp:
+        src: "{{ longhorn_mount_path }}/longhorn-disk.cfg"
+      register: longhorn_disk_cfg
+
+    - name: Parse Longhorn disk identity
+      ansible.builtin.set_fact:
+        longhorn_disk_identity: >-
+          {{ longhorn_disk_cfg.content | b64decode | from_json }}
+
+    - name: Fail if Longhorn disk UUID is unexpected
+      ansible.builtin.assert:
+        that:
+          - longhorn_disk_identity.diskUUID | default('') == longhorn_disk_uuid
+        fail_msg: >-
+          Refusing to continue on {{ inventory_hostname }}:
+          expected Longhorn diskUUID {{ longhorn_disk_uuid }},
+          found {{ longhorn_disk_identity.diskUUID | default('missing') }}.
+        success_msg: >-
+          {{ inventory_hostname }} Longhorn filesystem and
+          disk identity verified.
+
+    # All identity checks above must pass before changing persistent configuration.
+    # Keep active mounts untouched during this migration.
+    - name: Remove legacy device-based entries for the Longhorn mount
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        regexp: '^\s*/dev/\S+\s+{{ longhorn_mount_path | regex_escape }}\s+'
+        state: absent
+        backup: true
+
+    - name: Persist the verified Longhorn filesystem by UUID without remounting
+      ansible.posix.mount:
+        path: "{{ longhorn_mount_path }}"
+        src: "UUID={{ longhorn_fs_uuid }}"
+        fstype: ext4
+        opts: defaults
+        dump: "0"
+        passno: "2"
+        state: present
+        backup: true
+
+    - name: Create K3s agent drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/k3s-agent.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Require Longhorn storage before K3s agent startup
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/k3s-agent.service.d/20-longhorn-storage.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by Ansible: longhorn-storage-guard.yml
+          [Unit]
+          RequiresMountsFor={{ longhorn_mount_path }}
+
+    # Reload also picks up fstab migrations applied by earlier guard versions.
+    # No service state is requested: running agents are not restarted.
+    - name: Reload systemd units and fstab-generated mount dependencies
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: not ansible_check_mode
+
+    - name: Read effective K3s agent storage dependencies
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - k3s-agent.service
+          - --property=LoadState,RequiresMountsFor,Requires,After
+      register: k3s_storage_dependencies
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Verify effective required mount and startup ordering
+      ansible.builtin.assert:
+        that:
+          - "'LoadState=loaded' in k3s_storage_dependencies.stdout_lines"
+          - "longhorn_mount_path in (k3s_storage_dependencies.stdout_lines | select('match', '^RequiresMountsFor=') | first | regex_replace('^RequiresMountsFor=', '')).split()"
+          - "'var-lib-longhorn.mount' in (k3s_storage_dependencies.stdout_lines | select('match', '^Requires=') | first | regex_replace('^Requires=', '')).split()"
+          - "'var-lib-longhorn.mount' in (k3s_storage_dependencies.stdout_lines | select('match', '^After=') | first | regex_replace('^After=', '')).split()"
+        success_msg: K3s requires the Longhorn mount and starts after it; no agent restart performed.
+        fail_msg: K3s mount dependency verification failed; do not restart or reboot this worker.
+      when: not ansible_check_mode
+
+    - name: Explain check-mode verification boundary
+      ansible.builtin.debug:
+        msg: Effective systemd dependency assertions run after an actual apply and daemon reload.
+      when: ansible_check_mode

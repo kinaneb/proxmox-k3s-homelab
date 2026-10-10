@@ -1,0 +1,13 @@
+<!-- CI Trigger -->
+<html>
+<body>
+    <h1>Forgejo + Yaws Test</h1>
+    <p>
+        <erl>
+            out(Arg) ->
+                {html, io_lib:format("Current Server Time ::: ~p", [calendar:local_time()])}.
+        </erl>
+    </p>
+    <p>If you see the time above, Erlang is executing correctly!</p>
+</body>
+</html>

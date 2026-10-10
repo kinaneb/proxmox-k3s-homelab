@@ -1,0 +1,10 @@
+---
+longhorn_mount_path: /var/lib/longhorn
+longhorn_fs_uuid: "replace-with-filesystem-uuid"
+longhorn_disk_uuid: "replace-with-disk-uuid"
+worker_interface: ens18
+worker_ipv4_address: 192.0.2.21
+worker_ipv4_netmask: 255.255.255.0
+worker_ipv4_network: 192.0.2.0/24
+worker_ipv4_default: 192.0.2.1
+worker_dns_server: 192.0.2.53

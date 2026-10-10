@@ -1,0 +1,13 @@
+subproject: cluster-management
+last_updated: "2026-07-18"
+skills:
+  - technology: Ansible
+    evidence:
+      - summary: "Automated physical host operating system tuning and configuration parameters for Proxmox VE hypervisors."
+        source_link: "cluster-management/playbooks/pve-host-tuning.yaml"
+      - summary: "Orchestrated worker node OS parameters and dependencies matching container cluster runtimes."
+        source_link: "cluster-management/playbooks/k3s-node-tuning.yaml"
+  - technology: Proxmox VE
+    evidence:
+      - summary: "Designed physical hypervisor computing layers and configured VM networking schemas."
+        source_link: "cluster-management/inventory/hosts.local.ini"

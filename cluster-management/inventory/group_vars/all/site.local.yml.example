@@ -1,0 +1,5 @@
+---
+old_gateway: 192.0.2.254
+new_gateway: 192.0.2.1
+old_dns: 192.0.2.254
+new_dns: 192.0.2.53

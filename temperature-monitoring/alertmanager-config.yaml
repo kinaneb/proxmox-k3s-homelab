@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: discord-config
+  namespace: monitoring
+  labels:
+    alertmanagerConfig: main
+spec:
+  route:
+    receiver: "discord-notifications"
+  receivers:
+    - name: "discord-notifications"
+      discordConfigs:
+        - webhook_url:
+            name: discord-webhook-secret
+            key: url

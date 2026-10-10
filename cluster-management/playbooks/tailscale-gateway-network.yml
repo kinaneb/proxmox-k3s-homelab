@@ -1,0 +1,153 @@
+---
+- name: Reconcile Tailscale gateway network ownership
+  hosts: tailscale_gateways
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: Require the recorded gateway identity
+      ansible.builtin.assert:
+        that:
+          - ansible_host == gateway_ipv4_address
+          - gateway_interface is defined
+          - gateway_ipv4_address is defined
+          - gateway_ipv4_default is defined
+        fail_msg: >-
+          Refusing to change networking without the recorded gateway identity.
+
+    - name: Configure the static interface with ifupdown
+      ansible.builtin.copy:
+        dest: /etc/network/interfaces
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+        content: |
+          # Managed by Ansible: tailscale-gateway-network.yml
+          source /etc/network/interfaces.d/*
+
+          auto lo
+          iface lo inet loopback
+
+          allow-hotplug {{ gateway_interface }}
+          iface {{ gateway_interface }} inet static
+              address {{ gateway_ipv4_address }}
+              netmask {{ gateway_ipv4_netmask }}
+              gateway {{ gateway_ipv4_default }}
+              dns-nameservers {{ gateway_dns_server }}
+
+          iface {{ gateway_interface }} inet6 auto
+      register: ifupdown_config
+
+    - name: Remove the conflicting systemd-networkd interface definition
+      ansible.builtin.file:
+        path: /etc/systemd/network/10-static.network
+        state: absent
+      register: networkd_config
+
+    - name: Keep ifupdown enabled across boots
+      ansible.builtin.systemd_service:
+        name: networking.service
+        enabled: true
+
+    - name: Disable systemd-networkd across boots
+      ansible.builtin.systemd_service:
+        name: systemd-networkd.service
+        enabled: false
+      register: networkd_unit
+
+    # Run the handoff asynchronously because flushing ens18 briefly interrupts
+    # the SSH connection. The command continues locally and ifupdown restores
+    # the static address and routes before Ansible reconnects.
+    - name: Hand the live interface from networkd to ifupdown
+      ansible.builtin.shell: |
+        set -eu
+        systemctl stop systemd-networkd.service
+        ip address flush dev {{ gateway_interface }}
+        systemctl restart networking.service
+      args:
+        executable: /bin/sh
+      async: 45
+      poll: 0
+      changed_when: true
+      when:
+        - not ansible_check_mode
+        - >-
+          ifupdown_config.changed or networkd_config.changed or
+          networkd_unit.changed
+
+    - name: Wait for the gateway to return after network handoff
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 120
+      when:
+        - not ansible_check_mode
+        - >-
+          ifupdown_config.changed or networkd_config.changed or
+          networkd_unit.changed
+
+    - name: Reset the persistent SSH connection after network handoff
+      ansible.builtin.meta: reset_connection
+
+    - name: Read active IPv4 routes
+      ansible.builtin.command:
+        argv:
+          - ip
+          - -4
+          - route
+          - show
+      register: gateway_routes
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Read network service state
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - networking.service
+      register: networking_state
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Read Tailscale service state
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - tailscaled.service
+      register: tailscale_state
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Verify persistent route and service state
+      ansible.builtin.assert:
+        that:
+          - gateway_ipv4_network in gateway_routes.stdout
+          - gateway_ipv4_default in gateway_routes.stdout
+          - gateway_ipv4_address in gateway_routes.stdout
+          - networking_state.stdout == 'active'
+          - tailscale_state.stdout == 'active'
+        success_msg: Gateway routes, ifupdown and Tailscale are active.
+      when: not ansible_check_mode
+
+    - name: Verify LinguaWalk is reachable from the gateway
+      ansible.builtin.uri:
+        url: "http://{{ linguawalk_ingress_address }}/health"
+        headers:
+          Host: "{{ linguawalk_ingress_host }}"
+        status_code: 200
+        return_content: true
+      register: linguawalk_health
+      failed_when: >-
+        linguawalk_health.status != 200 or
+        linguawalk_health.json.status | default('') != 'ok'
+      when: not ansible_check_mode
+
+    - name: Explain check-mode boundary
+      ansible.builtin.debug:
+        msg: >-
+          Live network handoff and route/service assertions run only during
+          apply.
+      when: ansible_check_mode

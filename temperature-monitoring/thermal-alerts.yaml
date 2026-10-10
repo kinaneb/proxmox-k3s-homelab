@@ -1,0 +1,39 @@
+# Compatibility copy of thermal-alerts-all.yaml; deploy either file, not both.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    release: monitoring
+  name: thermal-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: thermal.rules
+      rules:
+        # chip is a hardware path; chip_name identifies Intel coretemp / AMD k10temp.
+        - alert: CPUHighTemperature
+          annotations:
+            description: "CPU on {{ $labels.instance }} ({{ $labels.chip_name }}, sensor {{ $labels.sensor }}) is running at {{ $value }}°C."
+            summary: "CPU overheating on {{ $labels.instance }}"
+          expr: |
+            (
+              node_hwmon_temp_celsius
+              * on (instance, job, chip) group_left (chip_name)
+              node_hwmon_chip_names{chip_name=~"coretemp|k10temp|cpu.*"}
+            ) > 85
+          for: 5m
+          labels:
+            severity: critical
+
+        # Exclude the existing Samsung NVMe controller hotspot from the SSD rule.
+        - alert: SSDHighTemperature
+          annotations:
+            description: "SSD {{ $labels.chip }} (sensor {{ $labels.sensor }}) on {{ $labels.instance }} reached {{ $value }}°C."
+            summary: "SSD thermal warning on {{ $labels.instance }}"
+          expr: |
+            (node_hwmon_temp_celsius{chip=~"nvme.*|ssd.*"} > 75)
+            unless
+            node_hwmon_temp_celsius{chip="nvme_nvme0", sensor="temp3"}
+          for: 5m
+          labels:
+            severity: warning

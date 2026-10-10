@@ -1,0 +1,12 @@
+# Add these lines to your monitoring-values.yaml
+# These flags tell the Helm chart: "Don't create the services, just create the monitors"
+kubeControllerManager:
+  enabled: false
+kubeCoreDNS:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false

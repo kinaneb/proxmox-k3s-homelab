@@ -1,0 +1,205 @@
+---
+- name: Prepare the Tailscale gateway for the LinguaWalk Funnel
+  hosts: tailscale_gateways
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: Require the recorded private and public routing values
+      ansible.builtin.assert:
+        that:
+          - ansible_host is defined
+          - linguawalk_ingress_address is defined
+          - linguawalk_ingress_host is defined
+          - linguawalk_funnel_proxy_port == 18080
+          - linguawalk_funnel_https_port == 443
+          - linguawalk_funnel_public_host is defined
+          - linguawalk_funnel_enabled | type_debug == 'bool'
+        fail_msg: >-
+          Refusing to configure the proxy with unrecorded routing values.
+
+    - name: Install the minimal Nginx package
+      ansible.builtin.apt:
+        name: nginx-light
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Remove the default Nginx site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Restart Nginx
+
+    - name: Configure the shared LinguaWalk proxy settings
+      ansible.builtin.copy:
+        dest: /etc/nginx/snippets/linguawalk-funnel-proxy.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          proxy_pass http://{{ linguawalk_ingress_address }};
+          proxy_http_version 1.1;
+          proxy_set_header Host {{ linguawalk_ingress_host }};
+          proxy_set_header Authorization $http_authorization;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Host $host;
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_connect_timeout 5s;
+          proxy_read_timeout 40s;
+          proxy_send_timeout 40s;
+      notify: Restart Nginx
+
+    - name: Configure the loopback-only LinguaWalk proxy
+      ansible.builtin.copy:
+        dest: /etc/nginx/sites-available/linguawalk-funnel
+        owner: root
+        group: root
+        mode: "0644"
+        # The exact route regex is clearer and safer as one Nginx directive.
+        # yamllint disable rule:line-length
+        content: |
+          # Managed by Ansible: linguawalk-funnel-gateway.yml
+          server {
+              listen 127.0.0.1:{{ linguawalk_funnel_proxy_port }};
+              server_name {{ linguawalk_funnel_public_host }};
+
+              location ~ ^/(health|profile|progress|learning/targets)$ {
+                  include /etc/nginx/snippets/linguawalk-funnel-proxy.conf;
+              }
+
+              location ~ ^/(session/(start|end)|vocabulary/event|grammar/event)$ {
+                  include /etc/nginx/snippets/linguawalk-funnel-proxy.conf;
+              }
+
+              location / {
+                  return 404;
+              }
+          }
+        # yamllint enable rule:line-length
+      notify: Restart Nginx
+
+    - name: Enable the LinguaWalk proxy site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/linguawalk-funnel
+        dest: /etc/nginx/sites-enabled/linguawalk-funnel
+        state: link
+      notify: Restart Nginx
+
+    - name: Validate Nginx configuration
+      ansible.builtin.command:
+        argv:
+          - nginx
+          - -t
+      changed_when: false
+
+    - name: Apply pending Nginx changes before verification
+      ansible.builtin.meta: flush_handlers
+
+    - name: Keep Nginx enabled and running
+      ansible.builtin.systemd_service:
+        name: nginx.service
+        enabled: true
+        state: started
+
+    - name: Verify the loopback proxy health response
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ linguawalk_funnel_proxy_port }}/health"
+        status_code: 200
+        return_content: true
+      register: proxy_health
+      failed_when: >-
+        proxy_health.status != 200 or
+        proxy_health.json.status | default('') != 'ok'
+
+    - name: Verify the proxy listens only on loopback
+      ansible.builtin.command:
+        argv:
+          - ss
+          - -H
+          - -lnt
+          - sport
+          - "="
+          - ":{{ linguawalk_funnel_proxy_port }}"
+      register: proxy_listener
+      changed_when: false
+      failed_when: >-
+        ('127.0.0.1:' ~ (linguawalk_funnel_proxy_port | string)) not in
+        proxy_listener.stdout or ('0.0.0.0:' ~
+        (linguawalk_funnel_proxy_port | string)) in proxy_listener.stdout
+
+    - name: Read the current Tailscale Funnel configuration
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - funnel
+          - status
+          - --json
+      register: funnel_status_before
+      changed_when: false
+
+    - name: Publish the LinguaWalk proxy through persistent public HTTPS
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - 120s
+          - tailscale
+          - funnel
+          - --bg
+          - --yes
+          - "--https={{ linguawalk_funnel_https_port }}"
+          - "127.0.0.1:{{ linguawalk_funnel_proxy_port }}"
+      when:
+        - linguawalk_funnel_enabled
+        - >-
+          linguawalk_funnel_public_host not in funnel_status_before.stdout or
+          ('127.0.0.1:' ~ (linguawalk_funnel_proxy_port | string)) not in
+          funnel_status_before.stdout
+
+    - name: Disable the LinguaWalk public HTTPS listener when requested
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - funnel
+          - "--https={{ linguawalk_funnel_https_port }}"
+          - "127.0.0.1:{{ linguawalk_funnel_proxy_port }}"
+          - "off"
+      when:
+        - not linguawalk_funnel_enabled
+        - >-
+          linguawalk_funnel_public_host in funnel_status_before.stdout and
+          ('127.0.0.1:' ~ (linguawalk_funnel_proxy_port | string)) in
+          funnel_status_before.stdout
+
+    - name: Read the resulting Tailscale Funnel configuration
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - funnel
+          - status
+          - --json
+      register: funnel_status_after
+      changed_when: false
+
+    - name: Verify the public HTTPS listener matches the declared state
+      ansible.builtin.assert:
+        that:
+          - >-
+            not linguawalk_funnel_enabled or
+            linguawalk_funnel_public_host in funnel_status_after.stdout
+          - >-
+            not linguawalk_funnel_enabled or
+            ('127.0.0.1:' ~ (linguawalk_funnel_proxy_port | string)) in
+            funnel_status_after.stdout
+          - >-
+            linguawalk_funnel_enabled or
+            linguawalk_funnel_public_host not in funnel_status_after.stdout
+        success_msg: >-
+          The Tailscale Funnel state matches linguawalk_funnel_enabled.
+
+  handlers:
+    - name: Restart Nginx
+      ansible.builtin.systemd_service:
+        name: nginx.service
+        state: restarted

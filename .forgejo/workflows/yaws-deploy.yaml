@@ -1,0 +1,40 @@
+name: Auto-Deploy Yaws
+on:
+  push:
+    paths:
+      - 'yaws-app/**'
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    # We use a container that has Docker and Kubectl pre-installed
+    container:
+      image: catthehacker/ubuntu:act-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Build and Push Image
+        env:
+          REGISTRY_ENDPOINT: ${{ vars.REGISTRY_ENDPOINT }}
+        run: |
+          docker build -t "${REGISTRY_ENDPOINT}/yaws-app:${{ github.sha }}" ./yaws-app
+          docker push "${REGISTRY_ENDPOINT}/yaws-app:${{ github.sha }}"
+
+      - name: Deploy to K3s
+        env:
+          REGISTRY_ENDPOINT: ${{ vars.REGISTRY_ENDPOINT }}
+        run: |
+          # 1. Install kubectl
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          mv kubectl /usr/local/bin/
+
+          # 2. Create the config file from the secret
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG_RAW }}" > $HOME/.kube/config
+
+          # 3. Perform the update
+          kubectl set image deployment/yaws-app \
+            "yaws-app=${REGISTRY_ENDPOINT}/yaws-app:${{ github.sha }}" \
+            -n default

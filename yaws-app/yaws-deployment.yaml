@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yaws-app
+  labels:
+    app: yaws-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: yaws-app
+  template:
+    metadata:
+      labels:
+        app: yaws-app
+    spec:
+      containers:
+      - name: yaws-app
+        image: registry.example.invalid/yaws-app:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yaws-service
+spec:
+  type: ClusterIP  # <--- FIX: This removes the External IP exposure
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: yaws-app
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: yaws-ingress
+  annotations:
+    # This tells Traefik to allow both HTTP and HTTPS
+    traefik.ingress.kubernetes.io/router.entrypoints: web, websecure
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: yaws.example.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: yaws-service
+                port:
+                  number: 80
+  # Adding this block enables the HTTPS listener
+  tls:
+    - hosts:
+        - yaws.example.invalid

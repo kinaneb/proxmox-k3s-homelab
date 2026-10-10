@@ -1,0 +1,5 @@
+ansible_user: root
+ansible_identity_file: ~/.ssh/homelab
+# You can append dedicated keys or instruct Ansible to prompt for this layer's pass:
+# ansible_password: "{{ proxmox_root_password }}"
+ansible_python_interpreter: /usr/bin/python3

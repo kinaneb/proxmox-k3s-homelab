@@ -1,0 +1,46 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: proxmox-nodes
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      # We will label the targets manually in the next step
+      app: node-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s
+  # Define the static targets (your Proxmox nodes)
+  targetLabels: [instance]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxmox-exporter
+  namespace: monitoring
+  labels:
+    app: node-exporter
+spec:
+  ports:
+  - name: metrics
+    port: 9100
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: proxmox-exporter
+  namespace: monitoring
+  labels:
+    app: node-exporter
+subsets:
+- addresses:
+  - ip: 192.0.2.21
+  - ip: 192.0.2.22
+  - ip: 192.0.2.23
+  ports:
+  - port: 9100
+    name: metrics

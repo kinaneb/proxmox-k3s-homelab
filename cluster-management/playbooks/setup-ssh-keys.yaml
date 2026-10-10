@@ -1,0 +1,35 @@
+---
+# =============================================================================
+# Playbook: setup-ssh-keys.yaml
+# Purpose:  One-time bootstrapping — deploys the homelab SSH public key to
+#           the user user on all K3s nodes so future Ansible runs and direct
+#           SSH connections work without password prompts (-k flag).
+#
+# Run ONCE with password auth, then never needed again:
+#   ansible-playbook playbooks/setup-ssh-keys.yaml --ask-vault-pass -k
+#
+# After this runs, all future playbooks work without -k:
+#   ansible-playbook playbooks/configure-unattended-upgrades.yaml --ask-vault-pass
+#   ansible-playbook playbooks/patch-cluster.yaml --ask-vault-pass
+# =============================================================================
+
+- name: "Deploy homelab SSH public key to all K3s nodes"
+  hosts: k3s_cluster
+  become: false   # authorized_key writes to the user's own ~/.ssh — no sudo needed
+
+  tasks:
+    - name: "Ensure ~/.ssh directory exists for user"
+      ansible.builtin.file:
+        path: ~/.ssh
+        state: directory
+        mode: "0700"
+
+    - name: "Add homelab public key to user's authorized_keys"
+      ansible.builtin.authorized_key:
+        user: "{{ ansible_user }}"
+        state: present
+        key: "{{ lookup('file', '~/.ssh/homelab.pub') }}"
+
+    - name: "Confirm key deployed"
+      ansible.builtin.debug:
+        msg: "✅ homelab key deployed to user@{{ inventory_hostname }} ({{ ansible_host }})"

@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: test-alert
+  namespace: monitoring
+spec:
+  groups:
+    - name: test.rules
+      rules:
+        - alert: ThermalTestAlert
+          expr: vector(1) == 1
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "TEST ALERT: This is a drill."
+            description: "If you are reading this, your notification pipeline is working."

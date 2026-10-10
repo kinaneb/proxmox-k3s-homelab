@@ -1,0 +1,40 @@
+.DS_Store
+# Cloud credential downloads commonly use <project>-<hex-id>.json names.
+/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].json
+client_secret*.json
+temp.txt
+homelab_context.md
+.idea/
+*.iml
+
+# Local secret material. Commit the matching *.example files only.
+**/.env
+**/.env.*
+!**/.env.example
+**/secrets.local.yml
+**/secrets.local.yaml
+**/secrets.local.env
+**/.vault-password*
+**/vault.local.yml
+**/kubeconfig
+**/kubeconfig.*
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*service-account*.local.json
+
+# Site identity and live infrastructure state.
+config/site.local.env
+cluster-management/inventory/hosts.local.ini
+cluster-management/inventory/host_vars/*.yml
+cluster-management/inventory/group_vars/**/site.local.yml
+cluster-management/manifests/*.local.yaml
+cluster_status_export/*.local.md
+global-view.local.md
+kasm/*.local.yaml
+linguawalk/k8s-overlays/local/
+linguawalk/local_previewer/
+linguawalk/gpt-action.openapi.local.json
+temperature-monitoring/overlays/local/
+temperature-monitoring/*.local.yaml
+yaws-app/*.local.yaml

@@ -1,0 +1,97 @@
+---
+# =============================================================================
+# Playbook: update-gateway.yaml
+# Purpose:  Update the default gateway on all Proxmox hosts and K3s VMs using
+#           values recorded in ignored local group variables.
+#
+# Approach:
+#   1. Update /etc/network/interfaces on each host (persistent config).
+#   2. Apply the change live with `ip route replace` (no reboot required).
+#   3. K3s VMs are reached via ProxyJump through their Proxmox parent host
+#      since direct connectivity is broken until the gateway is fixed.
+#
+# Usage:
+#   ansible-playbook playbooks/update-gateway.yaml
+#   ansible-playbook playbooks/update-gateway.yaml --check   # dry-run
+# =============================================================================
+
+- name: "Update gateway on Proxmox hosts (direct SSH)"
+  hosts: proxmox
+  become: true
+  tasks:
+    - name: "Replace gateway in /etc/network/interfaces"
+      ansible.builtin.replace:
+        path: /etc/network/interfaces
+        regexp: '(\s*gateway\s+){{ old_gateway }}'
+        replace: '\g<1>{{ new_gateway }}'
+        backup: yes
+      register: interfaces_changed
+
+    - name: "Apply new default route live (no reboot)"
+      ansible.builtin.command: >
+        ip route replace default via {{ new_gateway }}
+      when: interfaces_changed.changed
+      changed_when: true
+
+    - name: "Verify new default route is active"
+      ansible.builtin.command: ip route show default
+      register: route_result
+      changed_when: false
+
+    - name: "Print active default route"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ route_result.stdout }}"
+
+- name: "Update gateway on K3s master nodes (via ProxyJump through Proxmox)"
+  hosts: k3s_masters
+  become: true
+  tasks:
+    - name: "Replace gateway in /etc/network/interfaces"
+      ansible.builtin.replace:
+        path: /etc/network/interfaces
+        regexp: '(\s*gateway\s+){{ old_gateway }}'
+        replace: '\g<1>{{ new_gateway }}'
+        backup: yes
+      register: interfaces_changed
+
+    - name: "Apply new default route live"
+      ansible.builtin.command: >
+        ip route replace default via {{ new_gateway }}
+      when: interfaces_changed.changed
+      changed_when: true
+
+    - name: "Verify new default route is active"
+      ansible.builtin.command: ip route show default
+      register: route_result
+      changed_when: false
+
+    - name: "Print active default route"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ route_result.stdout }}"
+
+- name: "Update gateway on K3s worker nodes (via ProxyJump through Proxmox)"
+  hosts: k3s_workers
+  become: true
+  tasks:
+    - name: "Replace gateway in /etc/network/interfaces"
+      ansible.builtin.replace:
+        path: /etc/network/interfaces
+        regexp: '(\s*gateway\s+){{ old_gateway }}'
+        replace: '\g<1>{{ new_gateway }}'
+        backup: yes
+      register: interfaces_changed
+
+    - name: "Apply new default route live"
+      ansible.builtin.command: >
+        ip route replace default via {{ new_gateway }}
+      when: interfaces_changed.changed
+      changed_when: true
+
+    - name: "Verify new default route is active"
+      ansible.builtin.command: ip route show default
+      register: route_result
+      changed_when: false
+
+    - name: "Print active default route"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ route_result.stdout }}"

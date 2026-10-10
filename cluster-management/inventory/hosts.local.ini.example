@@ -1,0 +1,35 @@
+[k3s_masters]
+control-1 ansible_host=192.0.2.11
+control-2 ansible_host=192.0.2.12
+control-3 ansible_host=192.0.2.13
+
+[k3s_workers]
+worker-1 ansible_host=192.0.2.21
+worker-2 ansible_host=192.0.2.22
+worker-3 ansible_host=192.0.2.23
+
+[k3s_cluster:children]
+k3s_masters
+k3s_workers
+
+[tailscale_gateways]
+gateway-1 ansible_host=192.0.2.40
+
+[standalone_vms:children]
+tailscale_gateways
+
+[trixie_vms:children]
+k3s_cluster
+standalone_vms
+
+[proxmox]
+hypervisor-1 ansible_host=192.0.2.31
+hypervisor-2 ansible_host=192.0.2.32
+hypervisor-3 ansible_host=192.0.2.33
+
+[unraid]
+storage-1 ansible_host=192.0.2.50
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_private_key_file=~/.ssh/homelab

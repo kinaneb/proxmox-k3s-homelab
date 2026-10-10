@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runner
+  namespace: forgejo-runners
+  labels:
+    app: runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: runner
+  template:
+    metadata:
+      labels:
+        app: runner
+    spec:
+      containers:
+        - name: runner
+          image: gitea/act_runner:0.2.10
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              cat > config.yaml <<'EOF'
+              runner:
+                capacity: 1
+              container:
+                privileged: true
+                network: host
+                volumes:
+                  - /root/.kube/config:/root/.kube/config:ro
+              EOF
+              act_runner register --no-interactive \
+                --instance "$FORGEJO_INSTANCE_URL" \
+                --token "$FORGEJO_RUNNER_TOKEN" \
+                --name "$FORGEJO_RUNNER_NAME" \
+                --labels "self-hosted:docker://node:20-bullseye" || true
+              exec act_runner daemon --config config.yaml
+          env:
+            - name: DOCKER_HOST
+              value: unix:///var/run/docker.sock
+            - name: FORGEJO_INSTANCE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: forgejo-runner-site
+                  key: instance-url
+            - name: FORGEJO_RUNNER_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: forgejo-runner-site
+                  key: runner-name
+            - name: FORGEJO_RUNNER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: forgejo-runner-registration
+                  key: token
+          volumeMounts:
+            - mountPath: /var/run
+              name: docker-sock
+        - name: dind
+          image: docker:24.0.7-dind
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              rm -f /var/run/docker.pid
+              exec dockerd --host=unix:///var/run/docker.sock \
+                --insecure-registry="$REGISTRY_ENDPOINT"
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+            - name: REGISTRY_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: forgejo-runner-site
+                  key: registry-endpoint
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /var/run
+              name: docker-sock
+            - mountPath: /var/lib/docker
+              name: docker-storage
+            - mountPath: /root/.kube/config
+              name: k3s-config
+      volumes:
+        - name: docker-sock
+          emptyDir: {}
+        - name: docker-storage
+          emptyDir: {}
+        - name: k3s-config
+          hostPath:
+            path: /etc/rancher/k3s/k3s.yaml

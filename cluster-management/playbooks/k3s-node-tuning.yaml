@@ -1,0 +1,69 @@
+---
+- name: Reconcile and Tune K3s Cluster Workers
+  hosts: k3s_workers
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Ensure K3s system space exists
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: "0755"
+
+    - name: Deploy clean configuration definitions
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        owner: root
+        group: root
+        mode: "0644"
+        content: "{{ k3s_agent_config | to_nice_yaml }}"
+
+    - name: Re-build required cluster connection environment variables
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/k3s-agent.service.env
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          K3S_URL="{{ k3s_server_url }}"
+          K3S_TOKEN="{{ k3s_cluster_token }}"
+
+    - name: Ensure factory default systemd template is applied
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/k3s-agent.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Lightweight Kubernetes
+          Documentation=https://k3s.io
+          After=network-online.target firewalld.service connman.service network-manager.service
+          Wants=network-online.target
+          RequiresMountsFor=/var/lib/longhorn
+
+          [Service]
+          Type=notify
+          EnvironmentFile=-/etc/default/%N
+          EnvironmentFile=-/etc/sysconfig/%N
+          EnvironmentFile=-/etc/systemd/system/k3s-agent.service.env
+          KillMode=process
+          Delegate=yes
+          LimitNOFILE=1048576
+          LimitNPROC=infinity
+          LimitCORE=infinity
+          TasksMax=infinity
+          TimeoutStartSec=0
+          Restart=always
+          RestartSec=5
+          ExecStart=/usr/local/bin/k3s agent
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Force flush systemd unit cache and trigger agent reload
+      ansible.builtin.systemd:
+        name: k3s-agent
+        state: restarted
+        daemon_reload: true

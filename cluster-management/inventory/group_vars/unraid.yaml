@@ -1,0 +1,5 @@
+---
+# storage server; Unraid discovery uses raw (no remote Python dependency).
+ansible_user: root
+# ansible_password: "{{ unraid_root_password }}"
+ansible_python_interpreter: auto_silent

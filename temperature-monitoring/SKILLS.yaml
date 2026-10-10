@@ -1,0 +1,13 @@
+subproject: temperature-monitoring
+last_updated: "2026-07-18"
+skills:
+  - technology: Prometheus
+    evidence:
+      - summary: "Configured custom ServiceMonitors to scrape metrics endpoints from physical bare-metal nodes."
+        source_link: "temperature-monitoring/proxmox-monitor.yaml"
+      - summary: "Created custom PrometheusRules alert expressions to detect CPU core and NVMe thermal failures."
+        source_link: "temperature-monitoring/thermal-alerts-all.yaml"
+  - technology: Grafana
+    evidence:
+      - summary: "Designed and provisioned dashboard ConfigMaps loaded dynamically in Grafana using sidecar container reload APIs."
+        source_link: "temperature-monitoring/thermal-dashboard-configmap.yaml"

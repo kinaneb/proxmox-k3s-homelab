@@ -1,0 +1,11 @@
+---
+# Nonsecret worker configuration. Site identity and the join token are loaded
+# from ignored local files in this directory.
+k3s_agent_config:
+  kubelet-arg:
+    - "image-gc-high-threshold=80"
+    - "image-gc-low-threshold=60"
+
+k3s_server_url: "{{ k3s_server_url_local }}"
+ansible_user: "{{ ansible_user_local }}"
+ansible_python_interpreter: /usr/bin/python3

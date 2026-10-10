@@ -1,0 +1,18 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: kasm-ingressroute
+  namespace: kasm
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`kasm.example.invalid`)
+      kind: Rule
+      services:
+        - name: kasm-proxy-default
+          port: 8443
+          scheme: https
+          serversTransport: kasm-transport
+  tls:
+    secretName: kasm-tls-cert
